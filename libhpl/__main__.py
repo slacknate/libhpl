@@ -30,10 +30,10 @@ def main():
     args, _ = parser.parse_known_args()
 
     if getattr(args, "image", None) is not None:
-        convert_to_hpal(args.image)
+        convert_to_hpl(args.image)
 
     elif getattr(args, "palette", None) is not None:
-        convert_from_hpal(args.palette, args.size)
+        convert_from_hpl(args.palette, args.size)
 
 
 if __name__ == "__main__":
