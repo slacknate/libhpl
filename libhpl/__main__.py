@@ -1,7 +1,7 @@
 import os
 import argparse
 
-from .hpl import convert_to_hpal, convert_from_hpal
+from .hpl import convert_to_hpl, convert_from_hpl
 
 DEF_COLOR_SQUARE_SIZE = 20
 

@@ -8,7 +8,7 @@ HPAL_HEADER = (b"HPAL%\x01\x00\x00 \x04\x00\x00\x00\x01\x00\x00\x00\x00"
                b"\x00\x00\x00\x00\x00\x00\x01\x00\x00\x10\x00\x00\x00\x00")
 
 
-def convert_to_hpal(image_path):
+def convert_to_hpl(image_path):
     """
     Convert a PNG image to an HPL palette file.
 
@@ -52,7 +52,7 @@ def _remove_xff(color_data):
         yield chunk
 
 
-def convert_from_hpal(palette_path, color_size):
+def convert_from_hpl(palette_path, color_size):
     img_side_len = color_size * PALETTE_SQUARE_SIZE
 
     with open(palette_path, "rb") as hpl_fp:

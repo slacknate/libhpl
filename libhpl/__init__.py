@@ -1,1 +1,1 @@
-from .hpl import convert_to_hpal, convert_from_hpal
+from .hpl import convert_to_hpl, convert_from_hpl
