@@ -52,22 +52,44 @@ def _remove_0xff(color_data):
         yield chunk
 
 
-def convert_from_hpl(palette_path, color_size):
-    img_side_len = color_size * PALETTE_SQUARE_SIZE
-
+def _read_hpl(palette_path):
+    """
+    Helper function to read HPL files and create a bytestring raw palette.
+    """
     with open(palette_path, "rb") as hpl_fp:
         data = hpl_fp.read()
         _, color_data = data.split(HPAL_HEADER)
 
-    # Create our raw palette data.
-    palette = b"".join(_remove_0xff(color_data))
+    return b"".join(_remove_0xff(color_data))[::-1]
 
+
+def replace_palette(image_path, palette_path):
+    """
+    Create a copy of an image with the specified palette.
+    """
+    with Image.open(image_path) as image_fp:
+        image_size = image_fp.size
+        raw_img = image_fp.getdata()
+
+    palette = _read_hpl(palette_path)
+
+    with Image.new("P", image_size) as image_fp:
+        image_fp.im = raw_img
+        image_fp.putpalette(palette)
+        image_fp.load()
+        image_fp.save(image_path)
+
+
+def convert_from_hpl(palette_path, color_size):
+    img_side_len = color_size * PALETTE_SQUARE_SIZE
     out = palette_path.replace(".hpl", ".png")
+
+    palette = _read_hpl(palette_path)
 
     # We create a "P" image as that is a palette image. This will create a PNG
     # with a palette, meaning we can pass this image to `convert_to_hpl` and it will work.
     with Image.new("P", (img_side_len, img_side_len)) as image_fp:
-        image_fp.putpalette(palette[::-1])
+        image_fp.putpalette(palette)
         d = ImageDraw.Draw(image_fp)
 
         # Our palette will have 256 colors max. We draw this in image form as a 16x16 square of "pixels".
