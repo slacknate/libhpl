@@ -38,7 +38,7 @@ def convert_to_hpl(image_path):
             hpl_fp.write(chunk + b"\xFF")
 
 
-def _remove_xff(color_data):
+def _remove_0xff(color_data):
     """
     Remove every fourth byte of the color data we read
     from the palette file. Looking at `convert_to_hpal` we can
@@ -60,7 +60,7 @@ def convert_from_hpl(palette_path, color_size):
         _, color_data = data.split(HPAL_HEADER)
 
     # Create our raw palette data.
-    palette = b"".join(_remove_xff(color_data))
+    palette = b"".join(_remove_0xff(color_data))
 
     out = palette_path.replace(".hpl", ".png")
 
