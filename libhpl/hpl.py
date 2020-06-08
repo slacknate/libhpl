@@ -81,6 +81,10 @@ def replace_palette(image_path, palette_path):
 
 
 def convert_from_hpl(palette_path, color_size):
+    """
+    Create a PNG from an HPL palette file.
+    The image created is a visual representation of the contents of the palette.
+    """
     img_side_len = color_size * PALETTE_SQUARE_SIZE
     out = palette_path.replace(".hpl", ".png")
 
