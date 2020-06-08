@@ -20,8 +20,8 @@ def convert_to_hpl(image_path):
     """
     out = image_path.replace(".png", ".hpl")
 
-    with Image.open(image_path) as image:
-        palette = image.getdata().getpalette()
+    with Image.open(image_path) as image_fp:
+        palette = image_fp.getdata().getpalette()
 
     with open(out, "wb") as hpl_fp:
         hpl_fp.write(HPAL_HEADER)
