@@ -41,7 +41,7 @@ def convert_to_hpl(image_path):
 def _remove_0xff(color_data):
     """
     Remove every fourth byte of the color data we read
-    from the palette file. Looking at `convert_to_hpal` we can
+    from the palette file. Looking at `convert_to_hpl` we can
     see that 0xFF is inserted after every third byte of our palette data.
     """
     remaining = color_data
@@ -65,7 +65,7 @@ def convert_from_hpl(palette_path, color_size):
     out = palette_path.replace(".hpl", ".png")
 
     # We create a "P" image as that is a palette image. This will create a PNG
-    # with a palette, meaning we can pass this image to `convert_to_hpal` and it will work.
+    # with a palette, meaning we can pass this image to `convert_to_hpl` and it will work.
     with Image.new("P", (img_side_len, img_side_len)) as image_fp:
         image_fp.putpalette(palette[::-1])
         d = ImageDraw.Draw(image_fp)
