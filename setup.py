@@ -8,5 +8,5 @@ setup(
     url="https://github.com/slacknate/libhpl",
     description="A library for manipulating HPL color palettes via PNG.",
     packages=find_packages(include=["libhpl", "libhpl.*"]),
-    install_requires=["Pillow==6.2.2"]
+    install_requires=["Pillow==7.1.0"]
 )
