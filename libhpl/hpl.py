@@ -3,7 +3,7 @@ import os
 
 from PIL import Image, ImageDraw
 
-HPL_CHUNK_SIZE = 3
+HPL_COLOR_SIZE = 3
 HPL_MAX_COLORS = 256
 PALETTE_SQUARE_SIZE = 16
 
@@ -37,8 +37,8 @@ def convert_to_hpl(image, out=None):
         remaining = palette[::-1]
         while remaining:
             # We grab 3 byte chunks as each of these is an RGB tuple.
-            chunk = remaining[0:HPL_CHUNK_SIZE]
-            remaining = remaining[HPL_CHUNK_SIZE:]
+            chunk = remaining[0:HPL_COLOR_SIZE]
+            remaining = remaining[HPL_COLOR_SIZE:]
 
             # When we write a chunk we append 0xFF. This seems to be some kind of marker.
             # It could also be other information we do not need? Perhaps an alpha channel?
@@ -54,8 +54,8 @@ def _remove_0xff(color_data):
     remaining = color_data
 
     while remaining:
-        chunk = remaining[0:HPL_CHUNK_SIZE]
-        remaining = remaining[HPL_CHUNK_SIZE + 1:]
+        chunk = remaining[0:HPL_COLOR_SIZE]
+        remaining = remaining[HPL_COLOR_SIZE + 1:]
 
         yield chunk
 
@@ -157,3 +157,50 @@ def convert_from_hpl(palette, color_size, out=None):
                 y += 1
 
         image_fp.save(out, format="PNG")
+
+
+def get_index_color(image, palette_index):
+    """
+    Return the RGB tuple of the color at the palette index `palette_index`.
+    The index is the (x, y) coordinate of a 16 x 16 square of colors.
+    These colors are actually linear in memory/on disk so we have to convert
+    the index to a color offset and then to a byte offset.
+    """
+    x, y = palette_index
+    color_offset = y * PALETTE_SQUARE_SIZE + x
+    byte_offset = color_offset * HPL_COLOR_SIZE
+
+    with Image.open(image, formats=("PNG",)) as image_fp:
+        image_fp.load()
+        palette = image_fp.getdata().getpalette()
+        
+        color_data = palette[byte_offset:byte_offset+HPL_COLOR_SIZE]
+        return tuple(color_data)
+
+
+def set_index_color(image, palette_index, color_tuple):
+    """
+    Set the color for the given PNG palette image for the given palette index.
+    The index is the (x, y) coordinate of a 16 x 16 square of colors.
+    These colors are actually linear in memory/on disk so we have to convert
+    the index to a color offset and then to a byte offset.
+    """
+    x, y = palette_index
+    color_offset = y * PALETTE_SQUARE_SIZE + x
+    byte_offset = color_offset * HPL_COLOR_SIZE
+
+    with Image.open(image, formats=("PNG",)) as image_fp:
+        image_fp.load()
+        palette = image_fp.getdata().getpalette()
+
+        before = palette[:byte_offset]
+        after = palette[byte_offset+HPL_COLOR_SIZE:]
+        new_palette = before + bytes(color_tuple) + after
+
+        # If our image has been provided via BytesIO we need to seek to the beginning before writing
+        # out the new PNG data or we will most definitely corrupt the PNG integrity.
+        if isinstance(image, io.BytesIO):
+            image.seek(0)
+
+        image_fp.putpalette(new_palette)
+        image_fp.save(image, format="PNG")
