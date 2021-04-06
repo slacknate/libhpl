@@ -1,3 +1,6 @@
+import io
+import os
+
 from PIL import Image, ImageDraw
 
 HPL_CHUNK_SIZE = 3
@@ -8,7 +11,7 @@ HPAL_HEADER = (b"HPAL%\x01\x00\x00 \x04\x00\x00\x00\x01\x00\x00\x00\x00"
                b"\x00\x00\x00\x00\x00\x00\x01\x00\x00\x10\x00\x00\x00\x00")
 
 
-def convert_to_hpl(image_path):
+def convert_to_hpl(image, out=None):
     """
     Convert a PNG image to an HPL palette file.
 
@@ -18,9 +21,13 @@ def convert_to_hpl(image_path):
     Original script by resnovae, slight tweak by Labryz.
     Cleaned up some by slacknate.
     """
-    out = image_path.replace(".png", ".hpl")
+    if out is None:
+        if not isinstance(image, str):
+            raise ValueError("Must provide an output path or fp when not supplying image via file path!")
 
-    with Image.open(image_path) as image_fp:
+        out = image.replace(".png", ".hpl")
+
+    with Image.open(image) as image_fp:
         palette = image_fp.getdata().getpalette()
 
     with open(out, "wb") as hpl_fp:
@@ -45,6 +52,7 @@ def _remove_0xff(color_data):
     see that 0xFF is inserted after every third byte of our palette data.
     """
     remaining = color_data
+
     while remaining:
         chunk = remaining[0:HPL_CHUNK_SIZE]
         remaining = remaining[HPL_CHUNK_SIZE + 1:]
@@ -52,48 +60,73 @@ def _remove_0xff(color_data):
         yield chunk
 
 
-def _read_hpl(palette_path):
+def _read_hpl(palette):
     """
     Helper function to read HPL files and create a bytestring raw palette.
     """
-    with open(palette_path, "rb") as hpl_fp:
-        data = hpl_fp.read()
-        _, color_data = data.split(HPAL_HEADER)
+    if isinstance(palette, str) and os.path.exists(palette):
+        with open(palette, "rb") as hpl_fp:
+            data = hpl_fp.read()
 
+    elif isinstance(palette, io.BytesIO):
+        data = palette.read()
+
+    else:
+        raise TypeError(f"Unsupported palette type {palette}!")
+
+    _, color_data = data.split(HPAL_HEADER)
     return b"".join(_remove_0xff(color_data))[::-1]
 
 
-def replace_palette(image_path, palette_path):
+def replace_palette(image, palette):
     """
-    Create a copy of an image with the specified palette.
+    Do in-place palette swap of an existing image.
     """
-    with Image.open(image_path) as image_fp:
+    with Image.open(image, formats=("PNG",)) as image_fp:
         image_size = image_fp.size
         raw_img = image_fp.getdata()
 
-    palette = _read_hpl(palette_path)
+    # If our image is provided via path then it is also our output path.
+    if isinstance(image, str) and os.path.exists(image):
+        out = image
+
+    # If our image has been provided via BytesIO we need to seek to the beginning before writing
+    # out the new PNG data or we will most definitely corrupt the PNG integrity.
+    elif isinstance(image, io.BytesIO):
+        image.seek(0)
+        out = image
+
+    else:
+        raise TypeError(f"Unsupported image type {image}!")
+
+    palette = _read_hpl(palette)
 
     with Image.new("P", image_size) as image_fp:
         image_fp.im = raw_img
         image_fp.putpalette(palette)
         image_fp.load()
-        image_fp.save(image_path)
+        image_fp.save(out, format="PNG")
 
 
-def convert_from_hpl(palette_path, color_size):
+def convert_from_hpl(palette, color_size, out=None):
     """
     Create a PNG from an HPL palette file.
     The image created is a visual representation of the contents of the palette.
     """
     img_side_len = color_size * PALETTE_SQUARE_SIZE
-    out = palette_path.replace(".hpl", ".png")
 
-    palette = _read_hpl(palette_path)
+    if out is None:
+        if not isinstance(palette, str):
+            raise ValueError("Must provide an output path or fp when not supplying palette via file path!")
+
+        out = palette.replace(".hpl", ".png")
+
+    palette_data = _read_hpl(palette)
 
     # We create a "P" image as that is a palette image. This will create a PNG
     # with a palette, meaning we can pass this image to `convert_to_hpl` and it will work.
     with Image.new("P", (img_side_len, img_side_len)) as image_fp:
-        image_fp.putpalette(palette)
+        image_fp.putpalette(palette_data)
         d = ImageDraw.Draw(image_fp)
 
         # Our palette will have 256 colors max. We draw this in image form as a 16x16 square of "pixels".
