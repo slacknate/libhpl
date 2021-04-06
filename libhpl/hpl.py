@@ -159,6 +159,20 @@ def convert_from_hpl(palette, color_size, out=None):
         image_fp.save(out, format="PNG")
 
 
+def get_palette_index(image, pixel):
+    """
+    Get the palette index for the given pixel. The pixel is provided as an (x, y) tuple.
+    The `getpixel` method returns an integer value that is a color offset (i.e. a value from 0-255)
+    and we convert this value to an (x, y) tuple that maps into a 16 x 16 square of colors.
+    """
+    with Image.open(image, formats=("PNG",)) as image_fp:
+        image_fp.load()
+        color_offset = image_fp.getpixel(pixel)
+        palette_x = color_offset % PALETTE_SQUARE_SIZE
+        palette_y = int((color_offset - palette_x) / PALETTE_SQUARE_SIZE)
+        return palette_x, palette_y
+
+
 def get_index_color(image, palette_index):
     """
     Return the RGB tuple of the color at the palette index `palette_index`.
