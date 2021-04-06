@@ -156,4 +156,4 @@ def convert_from_hpl(palette, color_size, out=None):
             if x == 0:
                 y += 1
 
-        image_fp.save(out)
+        image_fp.save(out, format="PNG")
