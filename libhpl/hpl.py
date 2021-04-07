@@ -3,7 +3,8 @@ import os
 
 from PIL import Image, ImageDraw
 
-HPL_COLOR_SIZE = 3
+RAW_A_SIZE = 1
+RAW_RGB_SIZE = 3
 HPL_MAX_COLORS = 256
 PALETTE_SQUARE_SIZE = 16
 
@@ -28,54 +29,78 @@ def convert_to_hpl(image, out=None):
         out = image.replace(".png", ".hpl")
 
     with Image.open(image) as image_fp:
-        palette = image_fp.getdata().getpalette()
+        # Get color information from the palette.
+        rgb = image_fp.getdata().getpalette()
+        # Get transparency information from the tRNS header.
+        alpha = image_fp.info["transparency"]
+
+    if len(rgb) != len(alpha) * 3:
+        raise ValueError("Mismatch between RGB and transparency data!")
 
     with open(out, "wb") as hpl_fp:
         hpl_fp.write(HPAL_HEADER)
 
         # Iterate our palette data in reverse.
-        remaining = palette[::-1]
-        while remaining:
-            # We grab 3 byte chunks as each of these is an RGB tuple.
-            chunk = remaining[0:HPL_COLOR_SIZE]
-            remaining = remaining[HPL_COLOR_SIZE:]
+        remaining_palette = rgb[::-1]
+        remaining_alpha = alpha[::-1]
 
-            # When we write a chunk we append 0xFF. This seems to be some kind of marker.
-            # It could also be other information we do not need? Perhaps an alpha channel?
-            hpl_fp.write(chunk + b"\xFF")
+        while remaining_palette:
+            color = remaining_palette[:RAW_RGB_SIZE]
+            alpha = remaining_alpha[:RAW_A_SIZE]
+
+            remaining_palette = remaining_palette[RAW_RGB_SIZE:]
+            remaining_alpha = remaining_alpha[RAW_A_SIZE:]
+
+            hpl_fp.write(color + alpha)
 
 
-def _remove_0xff(color_data):
+def _parse_color_data(color_data):
     """
-    Remove every fourth byte of the color data we read
-    from the palette file. Looking at `convert_to_hpl` we can
-    see that 0xFF is inserted after every third byte of our palette data.
+    Parse the color data present in our HPL palette.
+    Separate the RGB and Alpha channels as we cannot create a palette image with an alpha channel
+    in the palette data. The transparency information needs to be included in a tRNS header.
     """
+    palette_data = bytearray()
+    alpha_data = bytearray()
     remaining = color_data
 
     while remaining:
-        chunk = remaining[0:HPL_COLOR_SIZE]
-        remaining = remaining[HPL_COLOR_SIZE + 1:]
+        rgb = remaining[:RAW_RGB_SIZE]
+        remaining = remaining[RAW_RGB_SIZE:]
 
-        yield chunk
+        alpha = remaining[:RAW_A_SIZE]
+        remaining = remaining[RAW_A_SIZE:]
+
+        palette_data += rgb
+        alpha_data += alpha
+
+    if len(palette_data) != len(alpha_data) * 3:
+        raise ValueError("Mismatch between RGB and transparency data!")
+
+    return palette_data[::-1], alpha_data[::-1]
 
 
 def _read_hpl(palette):
     """
-    Helper function to read HPL files and create a bytestring raw palette.
+    Helper function to read HPL files and create raw palette data.
     """
     if isinstance(palette, str) and os.path.exists(palette):
         with open(palette, "rb") as hpl_fp:
-            data = hpl_fp.read()
+            hpl_contents = hpl_fp.read()
 
     elif isinstance(palette, io.BytesIO):
-        data = palette.read()
+        hpl_contents = palette.read()
 
     else:
         raise TypeError(f"Unsupported palette type {palette}!")
 
-    _, color_data = data.split(HPAL_HEADER)
-    return b"".join(_remove_0xff(color_data))[::-1]
+    if not hpl_contents.startswith(HPAL_HEADER):
+        raise ValueError("Not a valid HPL file!")
+
+    remaining = hpl_contents[len(HPAL_HEADER):]
+    palette_data, alpha_data = _parse_color_data(remaining)
+
+    return palette_data, alpha_data
 
 
 def replace_palette(image, palette):
@@ -99,16 +124,23 @@ def replace_palette(image, palette):
     else:
         raise TypeError(f"Unsupported image type {image}!")
 
-    palette = _read_hpl(palette)
+    palette, alpha = _read_hpl(palette)
 
     with Image.new("P", image_size) as image_fp:
+        # Copy the image data from the source PNG.
         image_fp.im = raw_img
+        # Set the palette from the provided HPL file.
         image_fp.putpalette(palette)
+
+        # Reload the image so all the Pillow internals are up to date.
         image_fp.load()
-        image_fp.save(out, format="PNG")
+
+        # Setting the transparency kwarg to our alpha raw data creates a tRNS header.
+        # The kwarg expects an instance of `bytes()`.
+        image_fp.save(out, format="PNG", transparency=bytes(alpha))
 
 
-def convert_from_hpl(palette, color_size, out=None):
+def convert_from_hpl(hpl_palette, color_size, out=None):
     """
     Create a PNG from an HPL palette file.
     The image created is a visual representation of the contents of the palette.
@@ -116,17 +148,17 @@ def convert_from_hpl(palette, color_size, out=None):
     img_side_len = color_size * PALETTE_SQUARE_SIZE
 
     if out is None:
-        if not isinstance(palette, str):
+        if not isinstance(hpl_palette, str):
             raise ValueError("Must provide an output path or fp when not supplying palette via file path!")
 
-        out = palette.replace(".hpl", ".png")
+        out = hpl_palette.replace(".hpl", ".png")
 
-    palette_data = _read_hpl(palette)
+    palette, alpha = _read_hpl(hpl_palette)
 
     # We create a "P" image as that is a palette image. This will create a PNG
     # with a palette, meaning we can pass this image to `convert_to_hpl` and it will work.
     with Image.new("P", (img_side_len, img_side_len)) as image_fp:
-        image_fp.putpalette(palette_data)
+        image_fp.putpalette(palette)
         d = ImageDraw.Draw(image_fp)
 
         # Our palette will have 256 colors max. We draw this in image form as a 16x16 square of "pixels".
@@ -156,7 +188,9 @@ def convert_from_hpl(palette, color_size, out=None):
             if x == 0:
                 y += 1
 
-        image_fp.save(out, format="PNG")
+        # Setting the transparency kwarg to our alpha raw data creates a tRNS header.
+        # The kwarg expects an instance of `bytes()`.
+        image_fp.save(out, format="PNG", transparency=bytes(alpha))
 
 
 def get_palette_index(image, pixel):
@@ -167,7 +201,9 @@ def get_palette_index(image, pixel):
     """
     with Image.open(image, formats=("PNG",)) as image_fp:
         image_fp.load()
+
         color_offset = image_fp.getpixel(pixel)
+
         palette_x = color_offset % PALETTE_SQUARE_SIZE
         palette_y = int((color_offset - palette_x) / PALETTE_SQUARE_SIZE)
         return palette_x, palette_y
@@ -182,13 +218,14 @@ def get_index_color(image, palette_index):
     """
     x, y = palette_index
     color_offset = y * PALETTE_SQUARE_SIZE + x
-    byte_offset = color_offset * HPL_COLOR_SIZE
+    byte_offset = color_offset * RAW_RGB_SIZE
 
     with Image.open(image, formats=("PNG",)) as image_fp:
         image_fp.load()
+
         palette = image_fp.getdata().getpalette()
         
-        color_data = palette[byte_offset:byte_offset+HPL_COLOR_SIZE]
+        color_data = palette[byte_offset:byte_offset+RAW_RGB_SIZE]
         return tuple(color_data)
 
 
@@ -201,14 +238,18 @@ def set_index_color(image, palette_index, color_tuple):
     """
     x, y = palette_index
     color_offset = y * PALETTE_SQUARE_SIZE + x
-    byte_offset = color_offset * HPL_COLOR_SIZE
+    byte_offset = color_offset * RAW_RGB_SIZE
 
     with Image.open(image, formats=("PNG",)) as image_fp:
         image_fp.load()
+
+        # Get color data from the palette.
         palette = image_fp.getdata().getpalette()
+        # Get transparency information from the tRNS header.
+        alpha = image_fp.info["transparency"]
 
         before = palette[:byte_offset]
-        after = palette[byte_offset+HPL_COLOR_SIZE:]
+        after = palette[byte_offset+RAW_RGB_SIZE:]
         new_palette = before + bytes(color_tuple) + after
 
         # If our image has been provided via BytesIO we need to seek to the beginning before writing
@@ -217,4 +258,7 @@ def set_index_color(image, palette_index, color_tuple):
             image.seek(0)
 
         image_fp.putpalette(new_palette)
-        image_fp.save(image, format="PNG")
+        # Setting the transparency kwarg to our alpha raw data creates a tRNS header.
+        # We do this to ensure the transparency is preserved, although it is likely not necessary
+        # as we already have a tRNS header present from the source image.
+        image_fp.save(image, format="PNG", transparency=alpha)
