@@ -226,10 +226,15 @@ def get_index_color(image, palette_index):
     with Image.open(image, formats=("PNG",)) as image_fp:
         image_fp.load()
 
-        palette = image_fp.getdata().getpalette()
-        
-        color_data = palette[byte_offset:byte_offset+RAW_RGB_SIZE]
-        return tuple(color_data)
+        # Get color data from the palette.
+        palette_data = image_fp.getdata().getpalette()
+        # Get transparency information from the tRNS header.
+        alpha_data = image_fp.info["transparency"]
+
+        rgb = palette_data[byte_offset:byte_offset+RAW_RGB_SIZE]
+        alpha = alpha_data[color_offset:color_offset+RAW_A_SIZE]
+
+        return tuple(rgb + alpha)
 
 
 def set_index_color(image, palette_index, color_tuple):
@@ -239,6 +244,13 @@ def set_index_color(image, palette_index, color_tuple):
     These colors are actually linear in memory/on disk so we have to convert
     the index to a color offset and then to a byte offset.
     """
+    if len(color_tuple) != RAW_RGB_SIZE + RAW_A_SIZE:
+        raise ValueError("Must provide color as RGBA tuple!")
+
+    color_data = bytes(color_tuple)
+    rgb_data = color_data[:RAW_RGB_SIZE]
+    alpha_data = color_data[RAW_RGB_SIZE:RAW_RGB_SIZE+RAW_A_SIZE]
+
     x, y = palette_index
     color_offset = y * PALETTE_SQUARE_SIZE + x
     byte_offset = color_offset * RAW_RGB_SIZE
@@ -251,9 +263,13 @@ def set_index_color(image, palette_index, color_tuple):
         # Get transparency information from the tRNS header.
         alpha = image_fp.info["transparency"]
 
-        before = palette[:byte_offset]
-        after = palette[byte_offset+RAW_RGB_SIZE:]
-        new_palette = before + bytes(color_tuple) + after
+        pal_before = palette[:byte_offset]
+        pal_after = palette[byte_offset+RAW_RGB_SIZE:]
+        new_palette = pal_before + rgb_data + pal_after
+
+        alpha_before = alpha[:color_offset]
+        alpha_after = alpha[color_offset+RAW_A_SIZE:]
+        new_alpha = alpha_before + alpha_data + alpha_after
 
         # If our image has been provided via BytesIO we need to seek to the beginning before writing
         # out the new PNG data or we will most definitely corrupt the PNG integrity.
@@ -262,6 +278,5 @@ def set_index_color(image, palette_index, color_tuple):
 
         image_fp.putpalette(new_palette)
         # Setting the transparency kwarg to our alpha raw data creates a tRNS header.
-        # We do this to ensure the transparency is preserved, although it is likely not necessary
-        # as we already have a tRNS header present from the source image.
-        image_fp.save(image, format="PNG", transparency=alpha)
+        # The kwarg expects an instance of `bytes()`.
+        image_fp.save(image, format="PNG", transparency=new_alpha)
