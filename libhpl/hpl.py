@@ -88,6 +88,9 @@ def _read_hpl(palette):
         with open(palette, "rb") as hpl_fp:
             hpl_contents = hpl_fp.read()
 
+    elif isinstance(palette, str) and not os.path.exists(palette):
+        raise ValueError(f"Palette {palette} does not exist!")
+
     elif isinstance(palette, io.BytesIO):
         hpl_contents = palette.read()
 
