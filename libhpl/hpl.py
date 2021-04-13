@@ -212,6 +212,26 @@ def get_palette_index(image, pixel):
         return palette_x, palette_y
 
 
+def get_palette_index_range(image, *pixels):
+    """
+    The same as `get_palette_index` except we do the operation for a range of pixels.
+    """
+    palette_index_list = []
+
+    with Image.open(image, formats=("PNG",)) as image_fp:
+        image_fp.load()
+
+        for pixel in pixels:
+            color_offset = image_fp.getpixel(pixel)
+
+            palette_x = color_offset % PALETTE_SQUARE_SIZE
+            palette_y = int((color_offset - palette_x) / PALETTE_SQUARE_SIZE)
+
+            palette_index_list.append((palette_x, palette_y))
+
+    return palette_index_list
+
+
 def get_index_color(image, palette_index):
     """
     Return the RGB tuple of the color at the palette index `palette_index`.
@@ -235,6 +255,32 @@ def get_index_color(image, palette_index):
         alpha = alpha_data[color_offset:color_offset+RAW_A_SIZE]
 
         return tuple(rgb + alpha)
+
+
+def get_index_color_range(image, *palette_indices):
+    """
+    The same as `get_index_color` except we do the operation for a range of pixels.
+    """
+    color_list = []
+
+    with Image.open(image, formats=("PNG",)) as image_fp:
+        image_fp.load()
+
+        for x, y in palette_indices:
+            color_offset = y * PALETTE_SQUARE_SIZE + x
+            byte_offset = color_offset * RAW_RGB_SIZE
+
+            # Get color data from the palette.
+            palette_data = image_fp.getdata().getpalette()
+            # Get transparency information from the tRNS header.
+            alpha_data = image_fp.info["transparency"]
+
+            rgb = palette_data[byte_offset:byte_offset+RAW_RGB_SIZE]
+            alpha = alpha_data[color_offset:color_offset+RAW_A_SIZE]
+
+            color_list.append(tuple(rgb + alpha))
+
+    return color_list
 
 
 def set_index_color(image, palette_index, color_tuple):
