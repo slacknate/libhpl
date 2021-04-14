@@ -1,5 +1,6 @@
 import io
 import os
+import contextlib
 
 from PIL import Image, ImageDraw
 
@@ -10,6 +11,23 @@ PALETTE_SQUARE_SIZE = 16
 
 HPAL_HEADER = (b"HPAL%\x01\x00\x00 \x04\x00\x00\x00\x01\x00\x00\x00\x00"
                b"\x00\x00\x00\x00\x00\x00\x01\x00\x00\x10\x00\x00\x00\x00")
+
+
+@contextlib.contextmanager
+def output_palette(out):
+    """
+    Helper context manager that either wraps `open()` or simply yields an `io.BytesIO`.
+    Also provides basic type validation.
+    """
+    if isinstance(out, str):
+        with open(out, "wb") as hpl_fp:
+            yield hpl_fp
+
+    elif isinstance(out, io.BytesIO):
+        yield out
+
+    else:
+        raise TypeError(f"Unsupported output palette type {out}!")
 
 
 def convert_to_hpl(image, out=None):
@@ -37,7 +55,7 @@ def convert_to_hpl(image, out=None):
     if len(rgb) != len(alpha) * 3:
         raise ValueError("Mismatch between RGB and transparency data!")
 
-    with open(out, "wb") as hpl_fp:
+    with output_palette(out) as hpl_fp:
         hpl_fp.write(HPAL_HEADER)
 
         # Iterate our palette data in reverse.
