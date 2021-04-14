@@ -106,7 +106,7 @@ def _read_hpl(palette):
     return palette_data, alpha_data
 
 
-def replace_palette(image, palette):
+def replace_palette(image, new_palette):
     """
     Do in-place palette swap of an existing image.
     """
@@ -127,7 +127,7 @@ def replace_palette(image, palette):
     else:
         raise TypeError(f"Unsupported image type {image}!")
 
-    palette, alpha = _read_hpl(palette)
+    palette, alpha = _read_hpl(new_palette)
 
     with Image.new("P", image_size) as image_fp:
         # Copy the image data from the source PNG.
