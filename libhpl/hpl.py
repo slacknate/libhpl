@@ -4,7 +4,7 @@ import contextlib
 
 from PIL import Image, ImageDraw
 
-RAW_RGBA_SIZE = 4  # FIXME
+RAW_RGBA_SIZE = 4
 RAW_RGB_SIZE = 3
 RAW_A_SIZE = 1
 
