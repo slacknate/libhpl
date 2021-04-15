@@ -1,9 +1,28 @@
 import os
 import argparse
 
-from .hpl import convert_to_hpl, convert_from_hpl, replace_palette
+from .hpl import PNGPalette, PNGPaletteImage
 
 DEF_COLOR_SQUARE_SIZE = 20
+
+
+def convert_to_hpl(image_path):
+    palette = PNGPalette(0)
+    palette.load_png(image_path)
+    palette.save_hpl(image_path.replace(".png", ".hpl"))
+
+
+def convert_from_hpl(hpl_path, size):
+    palette = PNGPalette(size)
+    palette.load_hpl(hpl_path)
+    palette.save_png(hpl_path.replace(".hpl", ".png"))
+
+
+def replace_palette(image_path, hpl_path):
+    palette = PNGPaletteImage()
+    palette.load_hpl(hpl_path)
+    palette.load_png(image_path)
+    palette.save_png(image_path)
 
 
 def abs_path(value):
