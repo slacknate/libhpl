@@ -1,3 +1,6 @@
+"""
+Reference: https://gist.github.com/Labryz/62bb6dbe574f1984896aa7ef80da9c34
+"""
 import io
 import os
 import contextlib
