@@ -4,9 +4,9 @@ import contextlib
 
 from PIL import Image, ImageDraw
 
-RAW_RGBA_SIZE = 4
 RAW_RGB_SIZE = 3
 RAW_A_SIZE = 1
+RAW_RGBA_SIZE = RAW_RGB_SIZE + RAW_A_SIZE
 
 HPL_MAX_COLORS = 256
 PALETTE_SQUARE_SIZE = 16
@@ -46,7 +46,7 @@ def _parse_color_data(color_data):
 
     # We flip the palette data for compatibility with PNG palette images.
     # Note that HPL palette files store there color data in the format BGRA.
-    # This is important and we need to remember this in `_load_hpl`.
+    # This is important and we need to remember this in `_save_hpl`.
     remaining_argb = color_data[::-1]
 
     while remaining_argb:
