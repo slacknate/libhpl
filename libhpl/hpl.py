@@ -121,25 +121,22 @@ def _save_hpl(rgba, hpl_output):
             hpl_fp.write(bgra)
 
 
-def _index_to_offset(index):
+def _palette_index(index):
     """
     Convert the given palette index into a byte offset we can
-    use to index into the RGBA array that describes our palette data.
+    use to index into an image data array.
     """
     if not isinstance(index, (int, tuple)):
         raise TypeError(f"Unsupported palette index type {index}!")
 
     # If we have a tuple we need to calculate the color offset as if
     # we are given the (x, y) coordinates of a 16x16 2D array.
+    # Otherwise we were given the index directly as an integer.
     if isinstance(index, tuple):
         x, y = index
-        color_offset = y * PALETTE_SQUARE_SIZE + x
+        index = y * PALETTE_SQUARE_SIZE + x
 
-    # Otherwise we were given the index directly as an integer.
-    else:
-        color_offset = index
-
-    return color_offset * RAW_RGBA_SIZE
+    return index
 
 
 class HPLPalette:
@@ -169,7 +166,8 @@ class HPLPalette:
         Helper method for a common implementation between
         both `get_index_color` and `get_index_color_range`.
         """
-        rgba_offset = _index_to_offset(index)
+        index = _palette_index(index)
+        rgba_offset = index * RAW_RGBA_SIZE
         return self.rgba[rgba_offset:rgba_offset+RAW_RGBA_SIZE]
 
     def get_index_color(self, index):
@@ -211,7 +209,8 @@ class HPLPalette:
         if isinstance(rgba, tuple):
             rgba = bytes(rgba)
 
-        rgba_offset = _index_to_offset(index)
+        index = _palette_index(index)
+        rgba_offset = index * RAW_RGBA_SIZE
         self.rgba[rgba_offset:rgba_offset+RAW_RGBA_SIZE] = rgba
 
     def set_index_color(self, index, rgba):
@@ -244,7 +243,7 @@ def _load_png(png_input):
         # Get image size.
         size = image_fp.size
         # Get image data.
-        image = image_fp.getdata()
+        image = bytearray(image_fp.getdata())
         # Get color information from the palette.
         rgb = image_fp.getdata().getpalette()
         # Get transparency information from the tRNS header.
@@ -370,7 +369,7 @@ class PNGPaletteImage(HPLPalette):
     def __init__(self):
         super(PNGPaletteImage, self).__init__()
         self.image_size = (0, 0)
-        self.image_data = b""
+        self.image_data = bytearray()
 
     def load_png(self, png_input):
         """
@@ -393,14 +392,15 @@ class PNGPaletteImage(HPLPalette):
         """
         Copy the source image data to the new image we are writing out.
         """
-        image_fp.im = self.image_data
+        image_fp.putdata(self.image_data)
         image_fp.load()
 
-    def _get_palette_index(self, x, y):
+    def _get_palette_index(self, pixel):
         """
         Helper method for a common implementation between
         both `get_palette_index` and `get_palette_index_range`.
         """
+        x, y = pixel
         width, _ = self.image_size
         pixel_offset = y * width + x
 
@@ -419,16 +419,53 @@ class PNGPaletteImage(HPLPalette):
         if not self.image_data:
             raise ValueError("No image has been loaded!")
 
-        return self._get_palette_index(*pixel)
+        return self._get_palette_index(pixel)
 
     def get_palette_index_range(self, *pixels):
         """
-        The palette indices of the given pixels. Each pixel is an (x, y) tuple.
+        Get the palette indices of the given pixels. Each pixel is an (x, y) tuple.
         """
+        if not self.image_data:
+            raise ValueError("No image has been loaded!")
+
         palette_index_list = []
 
         for pixel in pixels:
-            palette_index = self._get_palette_index(*pixel)
+            palette_index = self._get_palette_index(pixel)
             palette_index_list.append(palette_index)
 
         return palette_index_list
+
+    def _set_palette_index(self, pixel, index):
+        """
+        Helper method for a common implementation between
+        both `set_palette_index` and `set_palette_index_range`.
+        """
+        x, y = pixel
+        width, _ = self.image_size
+        pixel_offset = y * width + x
+
+        # Our image data is a bytearray of length (width * height) where each byte is a palette index (integer 0-255).
+        palette_index_int = _palette_index(index)
+        self.image_data[pixel_offset] = palette_index_int
+
+    def set_palette_index(self, pixel, index):
+        """
+        Set the palette index for the given pixel. The pixel is provided as an (x, y) tuple.
+        The index is provided as an (x, y) tuple or an integer (0-255).
+        """
+        if not self.image_data:
+            raise ValueError("No image has been loaded!")
+
+        self._set_palette_index(pixel, index)
+
+    def set_palette_index_range(self, *pixel_indices):
+        """
+        Set the palette indices of the given pixels. Each pixel is an (x, y) tuple.
+        The index is provided as an (x, y) tuple or an integer (0-255).
+        """
+        if not self.image_data:
+            raise ValueError("No image has been loaded!")
+
+        for pixel, index in pixel_indices:
+            self._set_palette_index(pixel, index)
